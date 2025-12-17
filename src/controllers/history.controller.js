@@ -14,6 +14,7 @@ async function getHistory(req, res) {
 
     const history = await getChatHistory(sessionId);
     return res.json({ sessionId, history });
+
   } catch (error) {
     console.error("Get history error:", error);
     return res.status(500).json({ message: "Internal server error" });
@@ -31,6 +32,7 @@ async function deleteHistory(req, res) {
 
     await clearChatHistory(sessionId);
     return res.json({ message: "Chat history cleared" });
+
   } catch (error) {
     console.error("Delete history error:", error);
     return res.status(500).json({ message: "Internal server error" });

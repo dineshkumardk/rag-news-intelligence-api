@@ -1,6 +1,6 @@
 const { pool } = require("../db/postgres");
 const { generateEmbedding } = require("../services/embedding.service");
-const { client, COLLECTION } = require("../services/vector.service");
+const { getClient, COLLECTION } = require("../services/vector.service");
 const { generateAnswer } = require("../services/llm.service");
 const {
   getChatHistory,
@@ -11,7 +11,7 @@ async function chat(req, res) {
   const start = Date.now();
 
   try {
-    // ✅ Defensive check (IMPORTANT)
+    // ✅ Body validation
     if (!req.body) {
       return res.status(400).json({
         message: "Request body missing. Send JSON with sessionId and query."
@@ -26,31 +26,38 @@ async function chat(req, res) {
       });
     }
 
-    // 1️⃣ Get chat history from Redis
+    // 1️⃣ Redis chat history
     const history = await getChatHistory(sessionId);
 
-    // 2️⃣ Generate query embedding
+    // 2️⃣ Generate embedding
     let queryEmbedding = await generateEmbedding(query);
     queryEmbedding = queryEmbedding.slice(0, 384);
 
-    // 3️⃣ Vector search in Qdrant
-    const searchResults = await client.search(COLLECTION, {
-      vector: queryEmbedding,
-      limit: 3
-    });
+    // 3️⃣ Vector search (cloud-safe)
+    let context = "";
+    const client = getClient();
 
-    const context = searchResults
-      .map(r => r.payload?.content || "")
-      .join("\n");
+    if (client) {
+      const searchResults = await client.search(COLLECTION, {
+        vector: queryEmbedding,
+        limit: 3
+      });
+
+      context = searchResults
+        .map(r => r.payload?.content || "")
+        .join("\n");
+    } else {
+      console.warn("⚠️ Vector DB unavailable. Skipping semantic search.");
+    }
 
     // 4️⃣ Generate LLM answer
     const answer = await generateAnswer(context, query);
 
-    // 5️⃣ Save conversation to Redis
+    // 5️⃣ Save history to Redis
     history.push({ query, answer });
     await saveChatHistory(sessionId, history);
 
-    // 6️⃣ Log interaction to PostgreSQL
+    // 6️⃣ Log to PostgreSQL
     const responseTime = Date.now() - start;
     await pool.query(
       `INSERT INTO interaction_logs

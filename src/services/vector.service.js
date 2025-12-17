@@ -1,34 +1,44 @@
 const { QdrantClient } = require("@qdrant/js-client-rest");
 
-const client = new QdrantClient({
-  url: process.env.QDRANT_URL
-});
-
+const QDRANT_URL = process.env.QDRANT_URL;
 const COLLECTION = "news_articles";
-const VECTOR_SIZE = 384;
+
+let client = null;
 
 async function initVectorDB() {
-  const collections = await client.getCollections();
-  const exists = collections.collections.find(
-    (c) => c.name === COLLECTION
-  );
+  if (!QDRANT_URL) {
+    console.warn("⚠️ QDRANT_URL not set. Vector DB disabled (cloud mode)");
+    return;
+  }
 
-  if (!exists) {
-    await client.createCollection(COLLECTION, {
-      vectors: {
-        size: VECTOR_SIZE,
-        distance: "Cosine"
-      }
-    });
+  try {
+    client = new QdrantClient({ url: QDRANT_URL });
 
-    console.log("Qdrant collection created");
-  } else {
-    console.log("Qdrant collection already exists");
+    const collections = await client.getCollections();
+    const exists = collections.collections.some(
+      (c) => c.name === COLLECTION
+    );
+
+    if (!exists) {
+      await client.createCollection(COLLECTION, {
+        vectors: { size: 384, distance: "Cosine" }
+      });
+      console.log("✅ Qdrant collection created");
+    } else {
+      console.log("✅ Qdrant collection exists");
+    }
+  } catch (error) {
+    console.error("❌ Qdrant initialization failed:", error.message);
+    client = null; 
   }
 }
 
+function getClient() {
+  return client;
+}
+
 module.exports = {
-  client,
-  COLLECTION,
-  initVectorDB
+  initVectorDB,
+  getClient,
+  COLLECTION
 };
