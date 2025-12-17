@@ -1,35 +1,54 @@
-const news = require("../data/news.json");
+const { v4: uuidv4 } = require("uuid");
 const { generateEmbedding } = require("./embedding.service");
-const { client, COLLECTION } = require("./vector.service");
+const { getClient, COLLECTION } = require("./vector.service");
+
+// Mock / sample news data
+const newsArticles = [
+  {
+    title: "AI regulations",
+    content: "Governments are introducing new regulations to control AI usage."
+  },
+  {
+    title: "AI in healthcare",
+    content: "Researchers developed AI systems that diagnose diseases faster."
+  },
+  {
+    title: "Stock markets",
+    content: "Global markets rallied after central banks hinted rate slowdowns."
+  }
+];
 
 async function ingestNews() {
-  for (const article of news) {
-    let embedding = await generateEmbedding(article.content);
+  const client = getClient();
 
-    // Ensure vector size is EXACTLY 384
-    if (embedding.length !== 384) {
-      embedding = embedding.slice(0, 384);
-      while (embedding.length < 384) {
-        embedding.push(0);
-      }
-    }
+  // ✅ CLOUD MODE: Skip ingestion safely
+  if (!client) {
+    console.warn("⚠️ Vector DB unavailable. Skipping ingestion.");
+    return 0;
+  }
+
+  let count = 0;
+
+  for (const article of newsArticles) {
+    const embedding = await generateEmbedding(article.content);
 
     await client.upsert(COLLECTION, {
       points: [
         {
-          id: Number(article.id), // 🔑 MUST be number
-          vector: embedding,
+          id: uuidv4(),
+          vector: embedding.slice(0, 384),
           payload: {
             title: article.title,
-            content: article.content,
-            source: article.source
+            content: article.content
           }
         }
       ]
     });
+
+    count++;
   }
 
-  return news.length;
+  return count;
 }
 
 module.exports = { ingestNews };
