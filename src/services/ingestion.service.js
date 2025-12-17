@@ -1,8 +1,8 @@
-const { v4: uuidv4 } = require("uuid");
+const crypto = require("crypto");
 const { generateEmbedding } = require("./embedding.service");
 const { getClient, COLLECTION } = require("./vector.service");
 
-// Mock / sample news data
+// Mock news data
 const newsArticles = [
   {
     title: "AI regulations",
@@ -21,7 +21,7 @@ const newsArticles = [
 async function ingestNews() {
   const client = getClient();
 
-  // ✅ CLOUD MODE: Skip ingestion safely
+  // ✅ Cloud-safe: skip if vector DB unavailable
   if (!client) {
     console.warn("⚠️ Vector DB unavailable. Skipping ingestion.");
     return 0;
@@ -35,7 +35,7 @@ async function ingestNews() {
     await client.upsert(COLLECTION, {
       points: [
         {
-          id: uuidv4(),
+          id: crypto.randomUUID(), // ✅ Node 18 built-in UUID
           vector: embedding.slice(0, 384),
           payload: {
             title: article.title,
